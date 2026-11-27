@@ -14,13 +14,45 @@ def C(label, actual, op, thr):
     return {"label": label, "actual": actual, "op": op, "thr": thr, "ok": bool(_OPS[op](actual, thr))}
 
 
+MARGIN_T = 0.1           # fallback "unsure" line for engines without Laya's route field
+# The yes/no answers that decide whether an alert pages. category and severity are left out on
+# purpose: severity is already tested by value in R9, and uncalibrated Laya routes both of them to
+# review on almost every alert (23 of the 24 scripted alerts), so their flag carries no information.
+REVIEW_QS = ("customer_impact", "self_recovering", "sustained", "business_risk")
+
+
+def category_margin(cat):
+    """Top probability minus the runner-up. Computed from the probabilities because laya's own
+    `answer_confidence` is the top probability (max p), not a margin."""
+    ps = sorted((cat.get("probabilities") or {}).values(), reverse=True)
+    if not ps:
+        return 1.0
+    return ps[0] - (ps[1] if len(ps) > 1 else 0.0)
+
+
+def review_signal(a):
+    """Is the engine itself unsure about this alert? Returns (needs_review, explanation).
+
+    laya >= 0.5 answers carry `route` ("auto"/"review"), decided from the conformal prediction set
+    and the abstain flag; Laya's guidance is to gate on that, not on a raw confidence number.
+    Engines without it (classic Router, demo, Ollama) fall back to the category margin."""
+    routed = [q for q in REVIEW_QS if a.get(q, {}).get("route") is not None]
+    if routed:
+        flagged = [q for q in routed if a[q]["route"] == "review"]
+        return bool(flagged), ("Laya route=review on %s" % ", ".join(flagged) if flagged
+                               else "Laya route=auto on %s" % ", ".join(routed))
+    margin = category_margin(a["category"])
+    return margin < MARGIN_T, "category margin %.2f %s %.2f (no Laya route field)" % (
+        margin, "<" if margin < MARGIN_T else ">=", MARGIN_T)
+
+
 def _rules(a, alert):
     """THE decision table: ordered rules, first match wins. Used for the decision AND for the UI."""
     cat = a["category"]["choice"]
     imp, rec = a["customer_impact"]["noul"], a["self_recovering"]["noul"]
     sus, risk = a["sustained"]["noul"], a["business_risk"]["noul"]
     sev, tier = a["severity"]["score"], alert["tier"]
-    margin = a["category"].get("answer_confidence", 1.0)
+    unsure, unsure_why = review_signal(a)
     return [
         dict(id="R1", name="maintenance window", action="SUPPRESS",
              conds=[C("change_window", bool(alert.get("change_window")), "==", True)],
@@ -50,9 +82,12 @@ def _rules(a, alert):
         dict(id="R8", name="sustained, no impact yet", action="WATCH",
              conds=[C("sustained", sus, ">=", T), C("tier", tier, "<", 3)],
              why="sustained=%.2f impact=%.2f" % (sus, imp)),
-        dict(id="R9", name="unsure on tier-1: lean to page", action="PAGE",
-             conds=[C("tier", tier, "==", 1), C("severity", sev, ">=", 1.5), C("category_margin", margin, "<", 0.1)],
-             why="severity=%.2f, low margin" % sev),
+        dict(id="R9", name="model unsure on tier-1: lean to page", action="PAGE",
+             conds=[C("tier", tier, "==", 1), C("severity", sev, ">=", 1.5), C("needs_review", unsure, "==", True)],
+             why="severity=%.2f, %s" % (sev, unsure_why)),
+        dict(id="R9b", name="tier-1 safety net", action="PAGE",
+             conds=[C("tier", tier, "==", 1), C("severity", sev, ">=", 1.5)],
+             why="tier-1, severity=%.2f, no earlier rule matched: a missed page costs more than an extra one" % sev),
         dict(id="R10", name="default", action="TICKET",
              conds=[C("severity", sev, ">=", 1)], why="severity=%.2f" % sev),
         dict(id="R11", name="negligible", action="SUPPRESS", conds=[], why="severity=%.2f" % sev),

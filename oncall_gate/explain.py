@@ -3,7 +3,15 @@ Used by the Laya-vs-Ollama comparison so each row can show, per engine, HOW it r
 from . import policy
 from .questions import QUESTIONS
 
-PAGE_RULES = ("R2", "R4", "R5", "R9")
+PAGE_RULES = ("R2", "R4", "R5", "R9", "R9b")
+
+
+def review_fields(a):
+    """Laya's own uncertainty fields (laya >= 0.5); empty for engines that do not return them."""
+    out = {k: a[k] for k in ("route", "route_reason", "abstain", "prediction_set", "unbound") if a.get(k) is not None}
+    if a.get("level") is not None:
+        out["level"] = a["level"]
+    return out
 
 
 def answer_rows(ans):
@@ -17,7 +25,7 @@ def answer_rows(ans):
             txt, frac = "%.2f of %d" % (a["score"], len(a["legend"]) - 1), a["score"] / (len(a["legend"]) - 1)
         else:
             txt, frac = "%.0f%% yes" % (a["noul"] * 100), a["noul"]
-        rows.append({"id": qid, "question": q["instructions"], "answer": txt, "fraction": round(frac, 3)})
+        rows.append({"id": qid, "question": q["instructions"], "answer": txt, "fraction": round(frac, 3), **review_fields(a)})
     return rows
 
 
@@ -44,13 +52,18 @@ def why(table, winner_action, final_action, truth, corr_steps):
         want = "PAGE or MERGED" if truth == "page" else truth.upper()
         out.append("Expected %s but got %s." % (want, final_action))
         if truth == "page":
-            soft = ("customer_impact", "self_recovering", "sustained", "business_risk", "severity")
-            cands = []
+            soft = ("customer_impact", "self_recovering", "sustained", "business_risk", "severity", "needs_review")
+            cands, preempted = [], []
             for r in table:
                 if r["id"] in PAGE_RULES:
                     bad = [c for c in r["conds"] if not c["ok"]]
-                    if all(c["label"] in soft for c in bad):      # blocked only by a model answer, not by tier/category
+                    if not bad:                                   # matched, but an earlier rule won
+                        preempted.append(r)
+                    elif all(c["label"] in soft for c in bad):      # blocked only by a model answer, not by tier/category
                         cands.append((len(bad), sum(abs(c["actual"] - c["thr"]) / (3.0 if c["label"] == "severity" else 1.0) for c in bad), r, bad))
+            for r in preempted:
+                out.append("PAGE rule %s \"%s\" also matched, but %s \"%s\" comes earlier in the table and won." % (
+                    r["id"], r["name"], win["id"], win["name"]))
             if cands:
                 _, _, r, bad = min(cands, key=lambda x: x[:2])
                 out.append("Closest PAGE rule: %s \"%s\", blocked by %s." % (r["id"], r["name"], "; ".join(_gap(c) for c in bad)))
