@@ -1,0 +1,63 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1. Check Laya (diagnostic)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/check_laya.py",
+      "console": "integratedTerminal",
+      "env": {
+        "USE_TF": "0"
+      }
+    },
+    {
+      "name": "On-Call Gate + Laya (auto engine)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "console": "integratedTerminal",
+      "env": {
+        "LAYA_ENGINE": "auto",
+        "USE_TF": "0",
+        "PORT": "8080"
+      }
+    },
+    {
+      "name": "On-Call Gate (real Laya only - fail if no weights)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "console": "integratedTerminal",
+      "env": {
+        "LAYA_ENGINE": "laya",
+        "USE_TF": "0",
+        "PORT": "8080"
+      }
+    },
+    {
+      "name": "On-Call Gate (demo engine, no download)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "console": "integratedTerminal",
+      "env": {
+        "LAYA_ENGINE": "demo",
+        "PORT": "8080"
+      }
+    },
+    {
+      "name": "Pytest",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "-q",
+        "tests"
+      ],
+      "env": {
+        "LAYA_ENGINE": "demo"
+      }
+    }
+  ]
+}

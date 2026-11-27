@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>On-Call Gate</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16202a;--mut:#667085;--line:#e3e7ec;--acc:#0b6bcb;--page:#d92d20;--merge:#b42318;--watch:#dc6803;--ticket:#175cd3;--sup:#667085;--ok:#067647}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1419;--card:#161d25;--ink:#e8edf2;--mut:#93a0ae;--line:#26313c;--acc:#4da3ff;--page:#ff6b60;--merge:#ff8a80;--watch:#ffa94d;--ticket:#6aa9ff;--sup:#93a0ae;--ok:#4cd08a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,sans-serif}
+header{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}h1{font-size:18px;margin:0}.mut{color:var(--mut);font-size:13px}
+a{color:var(--acc)}#banner{margin:12px 24px 0;padding:10px 14px;border-radius:8px;background:#fff4e5;color:#7a4b00;display:none;font-size:13px}#banner.info{background:#e8f1fd;color:#0b4a8f}#banner.err{background:#fde8e8;color:#9b1c1c}#banner.ok{background:#e7f6ee;color:#067647}button:disabled{opacity:.5;cursor:not-allowed}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:14px 24px}
+button,select{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+main{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:18px;padding:0 24px 24px;max-width:1500px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:0 16px 16px}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:14px}.tile b{font-size:24px;display:block}
+.ev{border-top:1px solid var(--line);padding:10px 0;display:grid;grid-template-columns:78px 1fr;gap:10px}.ev:first-child{border:0}
+.chip{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;border:1px solid currentColor;text-align:center}
+.PAGE{color:var(--page)}.MERGED{color:var(--merge)}.WATCH{color:var(--watch)}.TICKET{color:var(--ticket)}.SUPPRESS{color:var(--sup)}
+.svc{font-weight:600}.bad{color:var(--page);font-weight:700}.good{color:var(--ok)}
+details{font-size:12px;color:var(--mut);margin-top:4px}.pg{font-family:ui-monospace,monospace;font-size:12px;padding:6px 0;border-top:1px solid var(--line)}.pg:first-child{border:0}
+textarea,input{font:inherit;width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.row{display:flex;gap:8px;margin-top:8px}
+
+.tabs{display:flex;gap:4px;margin-left:auto}.tab{border-radius:8px 8px 0 0;border-bottom:2px solid transparent;background:none;border-color:transparent}
+.tab.on{border-bottom-color:var(--acc);color:var(--acc);font-weight:600}
+#tab-arch{max-width:1200px;margin:auto;padding:18px 24px 40px}#tab-arch h2{font-size:16px;margin:22px 0 8px}
+.bx{fill:var(--card);stroke:var(--line);stroke-width:1.5}.bx.hi{stroke:var(--acc);stroke-width:2.5}.bx.dash{stroke-dasharray:5 4;fill:none}
+.band{fill:none;stroke:var(--line);stroke-width:1.5}.zone{fill:none;stroke:var(--ok);stroke-width:1.5;stroke-dasharray:6 4}
+.t{fill:var(--ink);font-size:13px}.t.b{font-weight:700}.t.m{fill:var(--mut);font-size:11.5px}.t.g{fill:var(--ok);font-size:11.5px;font-weight:700}
+.ar{fill:none;stroke:var(--mut);stroke-width:1.6;marker-end:url(#ah)}.ar.d{stroke-dasharray:5 4}.ah{fill:var(--mut)}
+ol.steps{padding-left:20px;margin:6px 0}ol.steps li{margin:6px 0}code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:12.5px}
+.kv{display:grid;grid-template-columns:170px 1fr;gap:4px 12px;font-size:13px;margin-top:8px}.kv span:nth-child(odd){color:var(--mut)}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:700;font-size:12px}
+.badge.ok{background:#e7f6ee;color:#067647}.badge.warn{background:#fff4e5;color:#7a4b00}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:900px){.g2{grid-template-columns:1fr}}
+.step{border-left:3px solid var(--acc);padding:2px 0 2px 12px;margin:10px 0;font-size:13px}.step b{display:block;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font-size:12px;margin:6px 0}
+
+.pbtn{margin-top:6px;padding:4px 10px;font-size:12px;border-color:var(--acc);color:var(--acc)}
+.pth{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg)}
+.pth-head{margin-bottom:8px}.pstep{display:grid;grid-template-columns:26px 1fr;gap:8px;margin:12px 0}
+.pn{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+.pt{font-weight:700}.pw{font-size:12px;margin:2px 0}.pw code{background:var(--card)}
+.tw{overflow-x:auto;margin-top:6px}table.dt{border-collapse:collapse;width:100%;font-size:12px;background:var(--card)}
+table.dt th,table.dt td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}table.dt th{color:var(--mut);font-weight:600}
+tr.win td{background:#e7f6ee;font-weight:600}tr.skip td{opacity:.5}tr.no td{color:var(--mut)}
+@media(prefers-color-scheme:dark){tr.win td{background:#12362a}}
+.cd{display:inline-block;margin:1px 6px 1px 0;white-space:nowrap}.cd.y{color:var(--ok)}.cd.n{color:var(--page)}
+.mini{height:6px;background:var(--line);border-radius:3px;min-width:80px}.mini i{display:block;height:100%;background:var(--acc);border-radius:3px}
+.pstep ul{margin:6px 0 0;padding-left:18px;font-size:12.5px}
+
+:root{--c1:#0b6bcb;--c2:#c2410c}@media(prefers-color-scheme:dark){:root{--c1:#4da3ff;--c2:#ff9a5c}}
+#tab-cmp{max-width:1300px;margin:auto;padding:18px 24px 40px}#tab-cmp h2{font-size:16px;margin:0 0 6px}
+.strip{margin:12px 24px 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 16px}.strip b{font-size:15px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.col1{border-top:4px solid var(--c1)}.col2{border-top:4px solid var(--c2)}
+.m{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}.m div{background:var(--bg);border-radius:8px;padding:8px 10px}.m b{display:block;font-size:20px}
+.bars .row2{display:grid;grid-template-columns:150px 1fr 90px;gap:10px;align-items:center;margin:6px 0;font-size:13px}
+.bar2{height:16px;border-radius:4px;background:var(--line)}.bar2 i{display:block;height:100%;border-radius:4px}
+.pb{height:10px;background:var(--line);border-radius:5px;overflow:hidden;margin:8px 0}.pb i{display:block;height:100%;background:var(--acc);transition:width .3s}
+.call{background:var(--bg);border-left:4px solid var(--acc);border-radius:6px;padding:8px 12px;margin:6px 0}
+tr.diff td{background:#fff4e5}@media(prefers-color-scheme:dark){tr.diff td{background:#3a2a10}}
+td.fh,tr.fh{display:none}.fchip{padding:4px 10px;font-size:12px;border-radius:99px;margin:2px 4px 2px 0}.fchip.on{background:var(--acc);border-color:var(--acc);color:#fff}.exp{font-size:11px;color:var(--page);font-weight:600}td.c1h{color:var(--c1)}td.c2h{color:var(--c2)}.x{cursor:pointer}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}@media(max-width:1000px){.tgrid{grid-template-columns:1fr}}.tcol{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)}.tcol .th{font-weight:700;margin-bottom:6px}.tl{font-size:11px;margin-left:6px;color:var(--acc);text-decoration:underline;cursor:pointer}.why li{margin:3px 0}
+</style></head><body>
+<header><h1>On-Call Gate</h1><span class="mut">Should this alert wake up the on-call engineer? Laya judges, policy decides.</span><div class="tabs"><button class="tab on" data-t="replay">Alert replay</button><button class="tab" data-t="cmp">Laya vs Ollama</button><button class="tab" data-t="arch">Architecture</button></div></header>
+<div id="banner"></div>
+<div id="tab-replay">
+<div class="card strip" id="cmpstrip"><span class="mut">Loading comparison status&hellip;</span></div>
+<div class="ctl">
+ <button class="pri" id="run">&#9654; Replay 24 alerts</button>
+ <select id="speed"><option value="900">Live (0.9 s / alert)</option><option value="250">Fast</option><option value="0">Instant batch</option></select>
+ <button id="reset">Reset</button><span class="mut" id="status"></span>
+</div>
+<main>
+<section class="card"><div class="tiles" id="tiles"></div><div id="feed"><p class="mut" id="ph">Press Replay to stream alerts through the decision engine.</p></div></section>
+<aside>
+ <div class="card"><b>Pager (simulated)</b><div id="pager"><p class="mut">No pages yet.</p></div></div>
+ <div class="card" style="margin-top:14px"><b>Inject your own alert</b>
+  <div class="row"><input id="xsvc" placeholder="service e.g. orders-db"><select id="xtier"><option>1</option><option>2</option><option>3</option></select></div>
+  <div class="row"><textarea id="xtxt" rows="3" placeholder="e.g. Connection pool at 99% for 6 minutes and rising; order creation failing for customers."></textarea></div>
+  <div class="row"><button id="xgo">Send alert</button></div></div>
+ <div class="card" style="margin-top:14px"><b>How decisions are made</b><p class="mut" style="margin:6px 0 0">Laya answers 6 questions per alert in one pass (category, customer impact, self-recovering, sustained, business risk, severity). <code>oncall_gate/policy.py</code> applies auditable rules: maintenance &rarr; suppress; tier-1 txn failures &rarr; page; recovered flaps &rarr; suppress; sustained but no impact &rarr; watch; same-service alerts in 10 min merge into one incident.</p></div>
+</aside></main>
+</div>
+<div id="tab-cmp" hidden>
+<div class="card"><h2>Laya vs Ollama: same alerts, same six questions, same policy rules</h2>
+<p class="mut" style="margin:0 0 10px">Only the <b>engine</b> changes. Laya answers in one forward pass; the local Ollama LLM generates JSON text. Both feed the identical rule table (<code>oncall_gate/policy.py</code>) and incident correlation, so differences in speed, accuracy and pages come from the engine alone. Ollama runs on this machine too (<code>ollama serve</code>).</p>
+<div class="row" style="align-items:center;flex-wrap:wrap"><input id="olurl" style="max-width:260px" value="http://localhost:11434" aria-label="Ollama URL">
+<select id="olmodel" aria-label="Ollama model"><option>(click Check Ollama)</option></select>
+<button id="olcheck">Check Ollama</button><button class="pri" id="olrun">&#9654; Run comparison (24 alerts &times; 2 engines)</button></div>
+<div id="olmsg" class="mut" style="margin-top:8px"></div>
+<div class="pb" id="cmpbar" hidden><i style="width:0%"></i></div><div class="mut" id="cmpphase"></div></div>
+<div id="cmpout"></div></div>
+<div id="tab-arch" hidden>
+<div class="card">
+<b>Architecture: how one alert becomes a page / ticket / suppress decision</b>
+<svg viewBox="0 0 940 410" width="100%" role="img" aria-label="Architecture diagram" style="margin-top:8px">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0 0L10 5L0 10z"/></marker></defs>
+<rect class="band" x="10" y="10" width="920" height="195" rx="12"/><text class="t m" x="24" y="30">Flask server (app.py) &#183; POST /api/alert handles each alert</text>
+<rect class="zone" x="196" y="40" width="356" height="150" rx="10"/><text class="t g" x="208" y="55">Runs on your machine (in-process)</text>
+<rect class="bx" x="20" y="60" width="150" height="100" rx="10"/><text class="t b" x="32" y="86">1 Alert in</text><text class="t m" x="32" y="108">alerts.py or your</text><text class="t m" x="32" y="124">custom alert:</text><text class="t m" x="32" y="140">service, tier, text</text>
+<rect class="bx" x="206" y="60" width="150" height="100" rx="10"/><text class="t b" x="218" y="86">2 Render</text><text class="t m" x="218" y="108">engine.render_state()</text><text class="t m" x="218" y="124">alert &#8594; short text</text><text class="t m" x="218" y="140">Laya reads text only</text>
+<rect class="bx hi" x="392" y="60" width="150" height="100" rx="10"/><text class="t b" x="404" y="86">3 Laya</text><text class="t m" x="404" y="108">Router, one forward</text><text class="t m" x="404" y="124">pass (no text gen)</text><text class="t m" x="404" y="140">&#8594; 6 typed answers</text>
+<rect class="bx" x="578" y="60" width="150" height="100" rx="10"/><text class="t b" x="590" y="86">4 Policy</text><text class="t m" x="590" y="108">policy.decide()</text><text class="t m" x="590" y="124">auditable rules</text><text class="t m" x="590" y="140">R1&#8211;R11 + thresholds</text>
+<rect class="bx" x="764" y="60" width="150" height="100" rx="10"/><text class="t b" x="776" y="86">5 Correlate</text><text class="t m" x="776" y="108">OnCallState.apply()</text><text class="t m" x="776" y="124">merge / escalate</text><text class="t m" x="776" y="140">simulated pager</text>
+<path class="ar" d="M170 110H204"/><path class="ar" d="M356 110H390"/><path class="ar" d="M542 110H576"/><path class="ar" d="M728 110H762"/>
+<rect class="bx" x="392" y="232" width="150" height="62" rx="10"/><text class="t b" x="404" y="254">Model weights</text><text class="t m" x="404" y="272">~/.cache/huggingface</text><text class="t m" x="404" y="287">downloaded once</text>
+<path class="ar" d="M467 232V162"/>
+<rect class="bx dash" x="206" y="232" width="150" height="62" rx="10"/><text class="t b" x="218" y="254">DemoEngine</text><text class="t m" x="218" y="272">fallback if no weights</text><text class="t m" x="218" y="287">keyword stand-in, NOT Laya</text>
+<path class="ar d" d="M300 232L410 162"/>
+<rect class="bx" x="10" y="330" width="300" height="58" rx="10"/><text class="t b" x="24" y="354">Browser UI (static/index.html)</text><text class="t m" x="24" y="372">Replay button, custom alert form</text>
+<path class="ar" d="M95 330V162"/><text class="t m" x="104" y="250">POST alert</text>
+<rect class="bx" x="624" y="330" width="306" height="58" rx="10"/><text class="t b" x="638" y="354">6 Response JSON back to the UI</text><text class="t m" x="638" y="372">feed &#183; pager log &#183; scorecard vs ground truth</text>
+<path class="ar" d="M839 162V328"/>
+</svg></div>
+
+<div class="g2">
+<div class="card"><b>What happens when you press Replay</b>
+<ol class="steps">
+<li>The browser sends each of the 24 alerts, one at a time, to <code>POST /api/alert</code> (<code>app.py</code>). Live mode just adds a delay between them.</li>
+<li><code>render_state()</code> packs service, tier and the alert text into the short text Laya will read.</li>
+<li><b>Laya</b> reads that text once and answers six questions in a single forward pass: category, customer impact, self-recovering, sustained, business risk, severity. It returns probabilities, never free text.</li>
+<li><code>policy.decide()</code> applies fixed rules to those probabilities (e.g. maintenance window &rarr; suppress; tier-1 transaction failures &rarr; page). Thresholds live in code so they can be audited and changed without retraining.</li>
+<li><code>OnCallState</code> correlates: alerts on the same service within 10 minutes <b>merge</b> into one incident, a second &ldquo;watch&rdquo; signal <b>escalates</b> to a page, and a page is written to the simulated pager.</li>
+<li>The UI shows the decision and why, updates the pager log, and the scorecard compares every decision with the hidden ground-truth label in <code>alerts.py</code>.</li></ol></div>
+<div class="card"><b>Is Laya running locally?</b><div id="eng"><p class="mut">Checking&hellip;</p></div></div></div>
+
+<div class="card" style="margin-top:16px"><b>Policy decision table (all rules, checked top to bottom, first match wins)</b><div id="poltab"><p class="mut">Loading&hellip;</p></div><p class="mut" style="margin:8px 0 0">Thresholds: <code>T = 0.50</code> for the probability tests. Each alert's own table (with the actual values) is under <i>Show decision path</i> on the replay tab.</p></div>
+<div class="g2">
+<div class="card"><b>Last alert, step by step</b><div id="trace"><p class="mut">Run a replay or send an alert, then come back here to see exactly what Laya received and what the policy did with it.</p></div></div>
+<div class="card"><b>Why split &ldquo;model&rdquo; from &ldquo;policy&rdquo;?</b>
+<p class="mut" style="margin:6px 0">Laya is good at <i>reading</i> messy text and judging it (&ldquo;is this transient?&rdquo;, &ldquo;are customers affected?&rdquo;). It is not a good place to hide business rules. So the model supplies probabilities and the policy decides what to do with them. A missed page is costlier than an extra page, so the rules lean toward paging on tier-1 services, and a hard rule (maintenance window) can never be overridden by the model.</p>
+<b style="display:block;margin-top:10px">Files</b>
+<div class="kv" style="grid-template-columns:max-content 1fr"><span>app.py</span><span>Flask API + serves this UI</span><span>oncall_gate/alerts.py</span><span>24 scripted alerts + ground truth</span><span>oncall_gate/questions.py</span><span>the 6 questions asked of Laya</span><span>oncall_gate/engine.py</span><span>real Laya Router / demo fallback</span><span>oncall_gate/policy.py</span><span>rules, correlation, pager, scorecard</span></div></div></div>
+</div>
+<script>
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+ ['replay','cmp','arch'].forEach(t=>{$('#tab-'+t).hidden=b.dataset.t!==t});if(b.dataset.t==='arch'){engInfo();trace();polTab()}if(b.dataset.t==='cmp'){cmpInit()}});
+let lastEv=null;
+async function polTab(){const r=await j('/api/policy');$('#poltab').innerHTML='<div class="tw"><table class="dt"><tr><th>Rule</th><th>All of these must hold</th><th>Outcome</th></tr>'+r.map(x=>`<tr><td><b>${x.id}</b> ${esc(x.name)}</td><td>${x.conditions.map(c=>'<span class="cd">'+esc(c)+'</span>').join(' AND ')}</td><td><span class="chip ${x.action}">${x.action}</span></td></tr>`).join('')+'</table></div>'}
+async function engInfo(){const e=await j('/api/engine');if(!e.engine){$('#eng').innerHTML='<span class="badge warn">'+(e.state==='failed'?'Failed to load':'Still loading')+'</span><p class="mut">'+esc(e.error||e.note)+'</p>';return}const r=(k,v)=>v==null?'':`<span>${k}</span><span>${esc(v)}</span>`;
+ $('#eng').innerHTML=(e.local?'<span class="badge ok">Yes: real Laya, running locally</span>':'<span class="badge warn">No: demo stand-in is active, Laya is NOT running</span>')+
+ `<div class="kv">${r('Engine',e.engine)}${r('Device',e.device)}${r('Checkpoints loaded',e.checkpoints_loaded&&e.checkpoints_loaded.join(', '))}${r('Laya / PyTorch',e.laya&&(e.laya+' / '+e.torch))}${r('Weights cache',e.weights_cache)}${r('Python',e.python+' on '+e.platform)}${r('Last call latency',lastEv&&(lastEv.latency_ms+' ms'))}</div>`+
+ (e.local?`<p class="mut" style="margin:10px 0 0">Inference is an in-process PyTorch call on this machine: no API key and no network request per alert. The internet is only used once, to download the weights from Hugging Face into the cache. To prove it, stop the app and start it with <code>HF_HUB_OFFLINE=1</code>; it should still work.</p>`:
+ `<p class="mut" style="margin:10px 0 0">${esc(e.note)}<br>Run <code>./setup.sh</code> to download the weights (needs access to huggingface.co), then restart with <code>LAYA_ENGINE=laya</code> so it fails loudly instead of falling back.</p>`)}
+function trace(){if(!lastEv)return;const e=lastEv,a=e.answers,d=e.decision,p=x=>Math.round(x*100)+'%';
+ $('#trace').innerHTML=`<div class="step"><b>1 Alert</b>${esc(e.id)} &middot; ${esc(e.service)} &middot; tier-${e.tier}</div>
+ <div class="step"><b>2 Text sent to Laya</b><pre>${esc(JSON.stringify(e.state_sent,null,1))}</pre></div>
+ <div class="step"><b>3 Laya's answers (${esc(e.engine)}, ${e.latency_ms} ms)</b>category: ${a.category} (${p(a.category_p)}) &middot; customer impact ${p(a.customer_impact)} &middot; self-recovering ${p(a.self_recovering)} &middot; sustained ${p(a.sustained)} &middot; business risk ${p(a.business_risk)} &middot; severity ${a.severity}/3</div>
+ <div class="step"><b>4 Policy rule</b>${esc(d.rule)} &rarr; <span class="chip ${d.base_action}">${d.base_action}</span> &mdash; ${esc(d.reasons[0])}</div>
+ <div class="step"><b>5 Correlation</b>${d.action!==d.base_action?esc(d.reasons.slice(1).join('; '))+' &rarr; final ':'no change &rarr; final '}<span class="chip ${d.action}">${d.action}</span>${d.incident?' &middot; '+d.incident:''}</div>`}
+</script>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const j=(u,o)=>fetch(u,o).then(r=>r.json()),post=(u,b)=>j(u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b||{})});
+let running=false;
+function evHtml(e){const d=e.decision,a=e.answers,p=x=>Math.round(x*100)+'%';
+ const mark=e.correct===null?'':e.correct?'<span class="good">&#10003; matches expected</span>':`<span class="bad">&#10007; expected ${e.truth}</span>`;
+ return `<div class="ev"><div><span class="chip ${d.action}">${d.action}</span><div class="mut">t+${e.t}m</div></div>
+ <div><span class="svc">${esc(e.service)}</span> <span class="mut">tier-${e.tier} &middot; ${a.category}</span> ${mark}
+ <div>${esc(e.text)}</div>
+ <details><summary>${esc(d.rule)}${d.incident?' &middot; '+d.incident:''}</summary>${d.reasons.map(esc).join('; ')}<br>impact ${p(a.customer_impact)} &middot; self-recovering ${p(a.self_recovering)} &middot; sustained ${p(a.sustained)} &middot; business risk ${p(a.business_risk)} &middot; severity ${a.severity}/3<br>${e.engine} &middot; ${e.latency_ms} ms</details><button class="pbtn" data-uid="${e.uid}">Show decision path</button><div class="pthbox" id="pth-${e.uid}"></div></div></div>`}
+async function score(){const s=await j('/api/scorecard');
+ const T=(k,v,c)=>`<div class="card tile"><b class="${c||''}">${v}</b><span class="mut">${k}</span></div>`;
+ $('#tiles').innerHTML=T('Alerts',s.alerts)+T('Pages sent',s.pages_sent,'bad')+T('Pages avoided',s.pages_avoided,'good')+T('Accuracy',s.accuracy==null?'-':Math.round(s.accuracy*100)+'%')+T('Missed pages',s.missed_pages.length,s.missed_pages.length?'bad':'good')+T('False pages',s.false_pages.length);
+ $('#pager').innerHTML=s.pager_log.length?s.pager_log.map(p=>`<div class="pg">t+${p.t}m &#128241; ${p.incident}: ${esc(p.message)}</div>`).reverse().join(''):'<p class="mut">No pages yet.</p>';
+ $('#status').textContent=s.wrong.length?('mismatches: '+s.wrong.join(', ')):''}
+const evMap={};let uidc=0;
+const f=v=>typeof v==='number'&&!Number.isInteger(v)?v.toFixed(2):String(v);
+function decisionTable(st){let h='<div class="tw"><table class="dt"><tr><th>Rule</th><th>Conditions (actual value, test, threshold)</th><th>Outcome</th><th>Result</th></tr>';
+ st.table.forEach(r=>{const res=r.winner?'WINNER':r.reached?(r.matched?'matched':'no match'):(r.matched?'would match (not reached)':'not reached');
+  h+=`<tr class="${r.winner?'win':r.reached?'no':'skip'}"><td><b>${r.id}</b> ${esc(r.name)}</td><td>${r.conds.length?r.conds.map(c=>`<span class="cd ${c.ok?'y':'n'}">${c.ok?'&#10003;':'&#10007;'} ${esc(c.label)} ${f(c.actual)} ${c.op} ${f(c.thr)}</span>`).join(''):'<span class="mut">always true (default)</span>'}</td><td><span class="chip ${r.action}">${r.action}</span></td><td>${res}</td></tr>`});
+ return h+'</table></div>'}
+function pathHtml(e){const P=e.path.steps;
+ let h=`<div class="pth"><div class="pth-head"><b>Decision path for ${esc(e.id)}: <span class="chip ${e.decision.action}">${e.decision.action}</span></b> <span class="mut">${esc(P[3].summary)}</span></div>`;
+ P.forEach(st=>{h+=`<div class="pstep"><div class="pn">${st.n}</div><div><div class="pt">${esc(st.title)}</div><div class="pw"><code>${esc(st.where)}</code> <span class="mut">${esc(st.loc)}</span></div><div class="mut">${esc(st.summary)}</div>`;
+  if(st.data)h+=`<pre>${esc(JSON.stringify(st.data,null,1))}</pre>`;
+  if(st.rows)h+='<div class="tw"><table class="dt"><tr><th>Question asked of Laya</th><th>Type</th><th>Laya\'s answer</th><th></th></tr>'+st.rows.map(r=>`<tr><td><b>${r.id}</b><br><span class="mut">${esc(r.question)}</span></td><td>${r.type}</td><td>${esc(r.answer)}</td><td><div class="mini"><i style="width:${Math.round(r.fraction*100)}%"></i></div></td></tr>`).join('')+'</table></div>';
+  if(st.table){h+=decisionTable(st);if(st.rejected.length)h+=`<div class="mut" style="margin-top:6px">Earlier rules rejected: ${st.rejected.map(esc).join('; ')}</div>`}
+  if(st.steps)h+='<ul>'+st.steps.map(s=>`<li>${esc(s)}</li>`).join('')+'</ul>';
+  if(st.pager)h+=`<div class="pg">&#128241; ${esc(st.pager)}</div>`;
+  h+='</div></div>'});
+ return h+'</div>'}
+function togglePath(uid,force){const box=$('#pth-'+uid);if(!box)return;const btn=document.querySelector(`.pbtn[data-uid="${uid}"]`);
+ const open=box.innerHTML&&!force;if(open){box.innerHTML='';btn.textContent='Show decision path'}else{box.innerHTML=pathHtml(evMap[uid]);btn.textContent='Hide decision path'}}
+document.addEventListener('click',ev=>{const b=ev.target.closest('.pbtn');if(b)togglePath(+b.dataset.uid)});
+async function send(body,open){const e=await post('/api/alert',body);if(e.error)return;lastEv=e;e.uid=++uidc;evMap[e.uid]=e;
+ if($('#ph')){$('#feed').innerHTML='';}$('#feed').insertAdjacentHTML('afterbegin',evHtml(e));await score();if(open)togglePath(e.uid,true)}
+$('#run').onclick=async()=>{if(running)return;running=true;await post('/api/reset');$('#feed').innerHTML='<span id="ph"></span>';
+ const al=await j('/api/alerts'),ms=+$('#speed').value;
+ for(const a of al){await send({id:a.id});if(ms)await new Promise(r=>setTimeout(r,ms))}running=false};
+$('#reset').onclick=async()=>{await post('/api/reset');$('#feed').innerHTML='<p class="mut" id="ph">Press Replay to stream alerts through the decision engine.</p>';score()};
+$('#xgo').onclick=async()=>{const t=$('#xtxt').value.trim();if(!t)return;await send({service:$('#xsvc').value,tier:$('#xtier').value,text:t},true);$('#xtxt').value=''};
+function pollHealth(){j('/api/health').then(h=>{const b=$('#banner');b.style.display='block';b.className='';
+ if(h.state==='ready'){$('#run').disabled=false;
+  if(h.engine==='demo'){b.textContent='DEMO MODE: '+h.note;}
+  else{b.className='ok';b.textContent='Real Laya is running locally. '+h.note+' (loaded in '+h.elapsed_s+' s)';setTimeout(()=>{if(b.className==='ok')b.style.display='none'},6000)}
+  return}
+ if(h.state==='failed'){$('#run').disabled=true;b.className='err';b.textContent='Laya failed to load: '+h.error+'  Run scripts/check_laya.py to see which step fails.';return}
+ $('#run').disabled=true;b.className='info';b.textContent='Loading Laya... ('+h.elapsed_s+' s) The first run downloads about 1.3 GB of weights from Hugging Face and can take several minutes; the console shows progress. Replay unlocks when ready.';
+ setTimeout(pollHealth,2000)}).catch(()=>setTimeout(pollHealth,3000))}
+pollHealth();score();
+</script>
+<script>
+const fm=x=>x==null?'-':(Math.abs(x)<1&&x!==0?'<1':Number(x).toLocaleString(undefined,{maximumFractionDigits:1}));
+let cmpRes=null,cmpPoll=null,cmpFilter='all';
+function applyCmpFilter(){const rows=[...document.querySelectorAll('#cmpout tr.x')];let shown=0;const keep=r=>{const la=r.dataset.la==='1',ol=r.dataset.ol==='1',df=r.dataset.df==='1';
+ return cmpFilter==='all'||(cmpFilter==='la'&&la)||(cmpFilter==='ol'&&ol)||(cmpFilter==='either'&&(la||ol))||(cmpFilter==='both'&&la&&ol)||(cmpFilter==='diff'&&df)};
+ rows.forEach(r=>{const k=keep(r),d=$('#cmpd'+r.dataset.i);r.classList.toggle('fh',!k);if(d)d.classList.toggle('fh',!k);if(k)shown++});
+ document.querySelectorAll('#cmpfilters .fchip').forEach(c=>c.classList.toggle('on',c.dataset.f===cmpFilter));
+ const s=$('#cmpshown');if(s)s.textContent='  Showing '+shown+' of '+rows.length;const n=$('#cmpnone');if(n){n.hidden=shown>0;n.textContent=shown?'':'No alerts match this filter: every decision in this category matches expectations.'}}
+async function cmpModels(){const r=await j('/api/ollama/models?url='+encodeURIComponent($('#olurl').value)),sel=$('#olmodel');
+ if(!r.ok){sel.innerHTML='<option value="">(not reachable)</option>';$('#olmsg').innerHTML='<span class="bad">'+esc(r.error)+'</span>';return false}
+ sel.innerHTML=r.models.length?r.models.map(m=>`<option ${m.startsWith(r.default)?'selected':''}>${esc(m)}</option>`).join(''):'<option value="">no models installed</option>';
+ $('#olmsg').innerHTML=r.models.length?'<span class="good">Ollama reachable, '+r.models.length+' model(s) installed.</span>':'<span class="bad">Ollama is running but has no models. Run: ollama pull llama3.2</span>';return r.models.length>0}
+function cmpInit(){if(!$('#olmodel').dataset.init){$('#olmodel').dataset.init=1;cmpModels()}}
+$('#olcheck').onclick=cmpModels;$('#olrun').onclick=async()=>{if(!(await cmpModels()))return;
+ const r=await post('/api/compare/start',{url:$('#olurl').value,model:$('#olmodel').value});if(r.error){$('#olmsg').innerHTML='<span class="bad">'+esc(r.error)+'</span>';return}
+ $('#olrun').disabled=true;pollCmp()};
+async function pollCmp(){const s=await j('/api/compare/status'),st=s.status;
+ $('#cmpbar').hidden=st.state!=='running';$('#cmpbar i').style.width=(st.total?Math.round(100*st.done/st.total):0)+'%';
+ $('#cmpphase').textContent=st.state==='running'?`${st.phase}: ${st.done}/${st.total} alerts`:(st.state==='error'?'Error: '+st.error:'');
+ if(st.state==='running'){cmpPoll=setTimeout(pollCmp,800);return}
+ $('#olrun').disabled=false;if(s.result){cmpRes=s.result;cmpRender(s.result)}cmpStrip(s.result)}
+function cmpStrip(r){const el=$('#cmpstrip');if(!r){el.innerHTML='<b>Laya vs Ollama</b><span class="mut">Compare Laya with a local Ollama model on the same alerts and rules.</span><button class="pri" onclick="document.querySelector(\'[data-t=cmp]\').click()">Run comparison</button>';return}
+ const [a,b]=r.engines;if(!a.summary||!b.summary){el.innerHTML='<b>Laya vs Ollama</b><span class="bad">'+esc(b.failed||a.failed||'comparison failed')+'</span><button onclick="document.querySelector(\'[data-t=cmp]\').click()">Details</button>';return}
+ const x=(b.summary.mean_ms/a.summary.mean_ms),pc=v=>v==null?'-':Math.round(v*100)+'%';
+ el.innerHTML=`<b>Laya vs Ollama</b><span><span style="color:var(--c1)">&#9632;</span> ${esc(a.label)}: <b>${fm(a.summary.mean_ms)} ms</b>/alert, accuracy ${pc(a.summary.accuracy)}, ${a.summary.missed_pages.length} missed pages</span>
+ <span><span style="color:var(--c2)">&#9632;</span> ${esc(b.label)}: <b>${fm(b.summary.mean_ms)} ms</b>/alert, accuracy ${pc(b.summary.accuracy)}, ${b.summary.missed_pages.length} missed pages</span>
+ <span class="mut">${a.stand_in?'(left is the keyword stand-in, not Laya)':'Laya is '+fm(x)+'x '+(x>=1?'faster':'slower')}</span><button onclick="document.querySelector('[data-t=cmp]').click()">Open comparison</button>`}
+function tile(k,v,cls){return `<div><b class="${cls||''}">${v}</b><span class="mut">${k}</span></div>`}
+function colHtml(e,cls){const s=e.summary;if(!s)return `<div class="card ${cls}"><b>${esc(e.label)}</b><p class="bad">${esc(e.failed)}</p></div>`;const pc=v=>v==null?'-':Math.round(v*100)+'%';
+ return `<div class="card ${cls}"><b>${esc(e.label)}</b>${e.stand_in?'<div class="badge warn" style="margin-left:8px">stand-in, NOT Laya</div>':''}<div class="m">
+ ${tile('mean latency / alert',fm(s.mean_ms)+' ms')}${tile('p95 latency',fm(s.p95_ms)+' ms')}${tile('total time (24 alerts)',fm(s.total_s)+' s')}${tile('throughput',fm(s.alerts_per_s)+' /s')}
+ ${tile('accuracy vs expected',pc(s.accuracy)+' ('+s.correct+'/'+s.scored+')')}${tile('missed pages',s.missed_pages.length,s.missed_pages.length?'bad':'good')}${tile('false pages',s.false_pages.length)}${tile('pages sent',s.pages_sent)}
+ ${tile('generated tokens',fm(s.output_tokens))}${tile('errors',s.errors,s.errors?'bad':'')}${tile('model load / warm-up',fm(s.load_warmup_s)+' s')}</div></div>`}
+function traceHtml(g,v,k){const col='var(--c'+(k+1)+')';
+ if(!v.answers)return `<div class="tcol"><div class="th" style="color:${col}">${esc(g.label)}</div><span class="bad">${esc(v.rule)}</span></div>`;
+ const t=v.trace;if(!t)return `<div class="tcol"><div class="th" style="color:${col}">${esc(g.label)} &rarr; ${v.action}</div><div class="mut">Re-run the comparison to get the step-by-step trace.</div></div>`;
+ const S=(n,title,body)=>`<div class="pstep"><div class="pn">${n}</div><div style="min-width:0;flex:1"><div class="pt">${title}</div>${body}</div></div>`;
+ return `<div class="tcol"><div class="th" style="color:${col}">${esc(g.label)} &rarr; <span class="chip ${v.action}">${v.action}</span> <span class="mut">${fm(v.ms)} ms${v.correct===false?' &middot; <span class="bad">wrong</span>':''}</span></div>`+
+  S(1,'The model answers the six questions','<div class="tw"><table class="dt"><tr><th>Question</th><th>Answer</th><th></th></tr>'+t.rows.map(r=>`<tr><td><b>${r.id}</b><br><span class="mut">${esc(r.question)}</span></td><td>${esc(r.answer)}</td><td><div class="mini"><i style="width:${Math.round(r.fraction*100)}%"></i></div></td></tr>`).join('')+'</table></div>')+
+  S(2,'Rules evaluated top to bottom, first match wins',`<div class="mut">${esc(t.headline)}</div>`+decisionTable({table:t.table}))+
+  S(3,'Correlation with open incidents','<ul>'+t.corr_steps.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>')+
+  S(4,'Why this decision (final: '+v.action+')','<ul class="why">'+t.why.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>')+'</div>'}
+function cmpRender(r){const [a,b]=r.engines;let h='';
+ if(a.stand_in)h+='<div class="call" style="border-color:var(--watch)"><b>Laya is not running</b> (weights not loaded), so the left column is the keyword stand-in. Its speed says nothing about Laya. Start the app with real Laya (see the Laya banner) and run again.</div>';
+ if(a.summary&&b.summary){const x=b.summary.mean_ms/a.summary.mean_ms,d=r.agreement;
+  h+=`<div class="card" style="margin-top:14px"><b>Headline</b>
+  <div class="call"><b>Speed:</b> ${esc(a.label)} averaged ${fm(a.summary.mean_ms)} ms per alert vs ${fm(b.summary.mean_ms)} ms for ${esc(b.label)}${a.stand_in?'.':': Laya is <b>'+fm(x)+'x '+(x>=1?'faster':'slower')+'</b>.'}</div>
+  <div class="call"><b>Quality:</b> accuracy ${Math.round(a.summary.accuracy*100)}% vs ${Math.round(b.summary.accuracy*100)}% against the expected decisions; missed pages ${a.summary.missed_pages.length} vs ${b.summary.missed_pages.length} (a missed page is the costly error).</div>
+  <div class="call"><b>Agreement:</b> both engines reached the same final decision on ${d.same} of ${d.total} alerts (${d.pct}%)${d.differ.length?'; they differ on '+d.differ.join(', '):''}.</div>
+  <div class="bars" style="margin-top:10px">${[['Mean latency (ms)','mean_ms'],['p95 latency (ms)','p95_ms'],['Total time (s)','total_s']].map(([l,k])=>{const m=Math.max(a.summary[k],b.summary[k])||1;
+   return `<div class="row2"><span>${l}</span><div><div class="bar2"><i style="width:${Math.max(1,100*a.summary[k]/m)}%;background:var(--c1)"></i></div><div class="bar2" style="margin-top:3px"><i style="width:${Math.max(1,100*b.summary[k]/m)}%;background:var(--c2)"></i></div></div><span>${fm(a.summary[k])} / ${fm(b.summary[k])}</span></div>`}).join('')}
+   <div class="mut">top bar = ${esc(a.label)}, bottom bar = ${esc(b.label)}</div></div></div>`}
+ h+='<div class="card" style="margin-top:14px"><b>How to read this</b><ul class="mut" style="margin:6px 0 0;padding-left:18px"><li>Latency is wall-clock time per alert for the engine call only; model load / warm-up is excluded and shown separately.</li><li>Ollama\'s speed depends heavily on the model size and your hardware, so try a smaller and a larger model. Laya is one fixed small model.</li><li>24 alerts is a tiny hand-labelled test: treat accuracy as a smoke test, not a benchmark. One run; Ollama uses temperature 0.</li><li>Ollama\'s numbers are the LLM\'s <i>stated</i> estimates (not calibrated probabilities) and its category is a single label, so rule R9 (low margin) can never fire for it.</li><li>An LLM can return malformed JSON: one retry is allowed, then that alert counts as an error.</li></ul></div>';
+ h+='<div class="cols">'+colHtml(a,'col1')+colHtml(b,'col2')+'</div>';
+ if(a.events.length&&b.events.length){
+  const wr=v=>v.correct===false,nA=a.events.filter(wr).length,nO=b.events.filter(wr).length,
+   nE=a.events.filter((e,i)=>wr(e)||wr(b.events[i])).length,nB=a.events.filter((e,i)=>wr(e)&&wr(b.events[i])).length,nD=a.events.filter((e,i)=>e.action!==b.events[i].action).length,N=a.events.length;
+  const F=[['all','All alerts',N],['la',(a.stand_in?'Stand-in':'Laya')+' wrong (expected \u2260 actual)',nA],['ol','Ollama wrong (expected \u2260 actual)',nO],['either','Either wrong',nE],['both','Both wrong',nB],['diff','Engines disagree',nD]];
+  h+=`<div class="card" style="margin-top:14px"><b>Alert by alert</b> <span class="mut">(click a row or its trace link for the step-by-step rule evaluation of both engines; orange rows = different final decision)</span>
+  <div style="margin:8px 0" id="cmpfilters"><span class="mut">Filter: </span>${F.map(([k,l,n])=>`<button class="fchip ${cmpFilter===k?'on':''}" data-f="${k}">${l} (${n})</button>`).join('')}<span class="mut" id="cmpshown"></span></div>
+  <div class="tw"><table class="dt"><tr><th>ID</th><th>Service</th><th>Expected</th><th style="color:var(--c1)">${esc(a.label)}</th><th>ms</th><th style="color:var(--c2)">${esc(b.label)}</th><th>ms</th></tr>`;
+  a.events.forEach((e,i)=>{const o=b.events[i],diff=e.action!==o.action,mk=v=>v.correct===null?'':v.correct?' &#10003;':' &#10007;',ex=v=>v.correct===false?`<div class="exp">expected ${v.truth==='page'?'PAGE / MERGED':String(v.truth).toUpperCase()}</div>`:'';
+   h+=`<tr class="x ${diff?'diff':''}" data-i="${i}" data-la="${wr(e)?1:0}" data-ol="${wr(o)?1:0}" data-df="${diff?1:0}"><td><b>${e.id}</b><a class="tl">trace &#9656;</a></td><td>${esc(e.service)} (t${e.tier})</td><td>${e.truth||'-'}</td><td class="c1h">${e.action}${mk(e)}${ex(e)}</td><td>${fm(e.ms)}</td><td class="c2h">${o.action}${mk(o)}${ex(o)}</td><td>${fm(o.ms)}</td></tr><tr hidden id="cmpd${i}"><td colspan="7"><div class="mut"><b>${e.id}</b> ${esc(e.text)}</div><div class="tgrid">${[[a,e],[b,o]].map(([g,v],k)=>traceHtml(g,v,k)).join('')}</div></td></tr>`});
+  h+='</table></div><div id="cmpnone" class="good" hidden style="margin-top:8px"></div></div>'}
+ $('#cmpout').innerHTML=h;document.querySelectorAll('#cmpout tr.x').forEach(tr=>tr.onclick=()=>{const d=$('#cmpd'+tr.dataset.i);d.hidden=!d.hidden;const l=tr.querySelector('.tl');if(l)l.innerHTML=d.hidden?'trace &#9656;':'hide &#9662;'});document.querySelectorAll('#cmpfilters .fchip').forEach(c=>c.onclick=()=>{cmpFilter=c.dataset.f;applyCmpFilter()});applyCmpFilter()}
+j('/api/compare/status').then(s=>{if(s.result){cmpRes=s.result;cmpStrip(s.result);cmpRender(s.result)}else cmpStrip(null);if(s.status.state==='running'){$('#olrun').disabled=true;pollCmp()}});
+</script>
+</body></html>

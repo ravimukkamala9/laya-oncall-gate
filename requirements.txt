@@ -1,0 +1,4 @@
+laya
+flask>=3
+huggingface_hub
+pytest
