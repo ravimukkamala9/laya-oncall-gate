@@ -15,7 +15,19 @@ def C(label, actual, op, thr):
 
 
 MARGIN_T = 0.1           # fallback "unsure" line for engines without Laya's route field
-REVIEW_QS = ("category", "customer_impact", "sustained", "business_risk", "severity")
+# The yes/no answers that decide whether an alert pages. category and severity are left out on
+# purpose: severity is already tested by value in R9, and uncalibrated Laya routes both of them to
+# review on almost every alert (23 of the 24 scripted alerts), so their flag carries no information.
+REVIEW_QS = ("customer_impact", "self_recovering", "sustained", "business_risk")
+
+
+def category_margin(cat):
+    """Top probability minus the runner-up. Computed from the probabilities because laya's own
+    `answer_confidence` is the top probability (max p), not a margin."""
+    ps = sorted((cat.get("probabilities") or {}).values(), reverse=True)
+    if not ps:
+        return 1.0
+    return ps[0] - (ps[1] if len(ps) > 1 else 0.0)
 
 
 def review_signal(a):
@@ -28,8 +40,8 @@ def review_signal(a):
     if routed:
         flagged = [q for q in routed if a[q]["route"] == "review"]
         return bool(flagged), ("Laya route=review on %s" % ", ".join(flagged) if flagged
-                               else "Laya route=auto on all key answers")
-    margin = a["category"].get("answer_confidence", 1.0)
+                               else "Laya route=auto on %s" % ", ".join(routed))
+    margin = category_margin(a["category"])
     return margin < MARGIN_T, "category margin %.2f %s %.2f (no Laya route field)" % (
         margin, "<" if margin < MARGIN_T else ">=", MARGIN_T)
 
@@ -73,6 +85,9 @@ def _rules(a, alert):
         dict(id="R9", name="model unsure on tier-1: lean to page", action="PAGE",
              conds=[C("tier", tier, "==", 1), C("severity", sev, ">=", 1.5), C("needs_review", unsure, "==", True)],
              why="severity=%.2f, %s" % (sev, unsure_why)),
+        dict(id="R9b", name="tier-1 safety net", action="PAGE",
+             conds=[C("tier", tier, "==", 1), C("severity", sev, ">=", 1.5)],
+             why="tier-1, severity=%.2f, no earlier rule matched: a missed page costs more than an extra one" % sev),
         dict(id="R10", name="default", action="TICKET",
              conds=[C("severity", sev, ">=", 1)], why="severity=%.2f" % sev),
         dict(id="R11", name="negligible", action="SUPPRESS", conds=[], why="severity=%.2f" % sev),

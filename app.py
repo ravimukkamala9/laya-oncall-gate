@@ -183,7 +183,7 @@ def alert_endpoint():
                          ("customer_impact", "self_recovering", "sustained", "business_risk")},
                       "severity": round(ans["severity"]["score"], 2)},
           "review": {"needs_review": unsure, "why": unsure_why,
-                     "flagged": [q for q in QUESTIONS if ans[q].get("route") == "review"]},
+                     "flagged": [q for q in policy.REVIEW_QS if ans[q].get("route") == "review"]},
           "decision": {"action": action, "base_action": base["base_action"], "rule": base["rule"],
                        "reasons": base["reasons"] + ([note] if note else []), "incident": inc},
           "path": path}

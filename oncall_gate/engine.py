@@ -69,7 +69,7 @@ class LayaEngine:
             self.model = laya.Agent(device=device, **kwargs)
         else:
             from laya import Router
-            self.model = Router()
+            self.model = Router(device=device)
 
     def predict(self, state):
         if self.backend == "vega":

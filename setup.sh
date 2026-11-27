@@ -11,7 +11,13 @@ if ! "$PY" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; t
   exit 1
 fi
 
-"$PY" -m venv .venv
+# Recreate .venv if it was built with an older Python (venv keeps an existing interpreter link).
+if [[ -x .venv/bin/python ]] && ! .venv/bin/python -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+  echo "Existing .venv uses $(.venv/bin/python --version 2>&1); recreating it with $("$PY" --version 2>&1)."
+  "$PY" -m venv --clear .venv
+else
+  "$PY" -m venv .venv
+fi
 .venv/bin/python -m pip install -q --upgrade pip
 .venv/bin/python -m pip install -q -r requirements.txt
 echo "Installed: $(.venv/bin/python -c 'import laya; print("laya", laya.__version__)')"

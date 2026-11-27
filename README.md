@@ -60,7 +60,7 @@ loads in a few seconds.
 ### 4. Check it works
 
 ```bash
-.venv/bin/python -m pytest -q tests      # 20 tests, run on the demo engine: no weights needed
+.venv/bin/python -m pytest -q tests      # 24 tests, run on the demo engine: no weights needed
 ```
 
 In the browser:
@@ -120,9 +120,13 @@ On the default engine (`LAYA_MODEL=vega`), every answer also carries Laya's own 
 | `unbound` | the input looks unlike anything it knows. Shown, but not used for routing |
 
 Laya's guidance is to **gate on `route`, not on a raw confidence number**, so rule **R9** ("model unsure on
-tier-1: lean to page") now fires when Laya routes a key answer (category, impact, sustained, business risk,
-severity) to `review`. Engines without these fields (classic Router, demo, Ollama) fall back to the old test,
-a category margin below 0.10. The decision path shows a **Laya review** column with the route, the
+tier-1: lean to page") now fires when Laya routes one of the yes/no answers that decide paging (impact,
+self-recovering, sustained, business risk) to `review`. `category` and `severity` flags are shown but not
+used: uncalibrated Laya flags them on almost every alert, so they carry no information, and R9 already
+tests severity by value. Engines without these fields (classic Router, demo, Ollama) fall back to a category
+margin (top probability minus the runner-up) below 0.10. Right after R9, rule **R9b "tier-1 safety net"**
+pages any tier-1 alert with severity ≥ 1.5 that no earlier rule matched, whatever the model's certainty.
+The decision path shows a **Laya review** column with the route, the
 prediction set and any abstain or unbound flags for each answer.
 
 On the new engine, severity is returned as an integer level plus a continuous `expected_score`. The app
@@ -146,9 +150,14 @@ about real alerts. Real Laya is answering cold, with no examples from your domai
 are noise alerts (N1–N5) that it ticketed instead of suppressing. Laya marks `category` and `severity` as
 `review` on almost every alert, which is its way of saying it hasn't been calibrated for this domain.
 
-On the same Laya answers, R9 on Laya's `route` scored 67% with 1 missed page; the old margin test scored
-62.5% with 2 missed pages (M2 and L1). To do better, tune the thresholds in `policy.py` on your own labelled
-alerts, or fit Laya on them (see *Notes*).
+Which rules fired: R9 only counts Laya's `review` flag on the yes/no answers (impact, self-recovering,
+sustained, business risk). None of those were flagged on the tier-1 alerts that reached it, so R9 didn't
+fire. The explicit **R9b "tier-1 safety net"** (tier-1, severity ≥ 1.5, no earlier rule matched → PAGE) paged
+M1, D3 and M2: it caught M2 and caused the M1 false page. Without R9b the run scores 62.5% with 2 missed
+pages (M2, L1) and 1 false page (D1). R9b is the trade the policy is built for, since a missed page costs
+more than an extra one. Delete it from `policy.py` if you prefer fewer pages. L1 is still missed because
+R6 ("impact, lower severity" → TICKET) comes before R9b in the table. To do better in general, tune the
+thresholds in `policy.py` on your own labelled alerts, or fit Laya on them (see *Notes*).
 
 The classic encoder (`LAYA_MODEL=classic`) is much faster per call (tens of ms) but doesn't return
 `route` / `prediction_set`.

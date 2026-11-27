@@ -3,7 +3,7 @@ Used by the Laya-vs-Ollama comparison so each row can show, per engine, HOW it r
 from . import policy
 from .questions import QUESTIONS
 
-PAGE_RULES = ("R2", "R4", "R5", "R9")
+PAGE_RULES = ("R2", "R4", "R5", "R9", "R9b")
 
 
 def review_fields(a):
@@ -53,12 +53,17 @@ def why(table, winner_action, final_action, truth, corr_steps):
         out.append("Expected %s but got %s." % (want, final_action))
         if truth == "page":
             soft = ("customer_impact", "self_recovering", "sustained", "business_risk", "severity", "needs_review")
-            cands = []
+            cands, preempted = [], []
             for r in table:
                 if r["id"] in PAGE_RULES:
                     bad = [c for c in r["conds"] if not c["ok"]]
-                    if all(c["label"] in soft for c in bad):      # blocked only by a model answer, not by tier/category
+                    if not bad:                                   # matched, but an earlier rule won
+                        preempted.append(r)
+                    elif all(c["label"] in soft for c in bad):      # blocked only by a model answer, not by tier/category
                         cands.append((len(bad), sum(abs(c["actual"] - c["thr"]) / (3.0 if c["label"] == "severity" else 1.0) for c in bad), r, bad))
+            for r in preempted:
+                out.append("PAGE rule %s \"%s\" also matched, but %s \"%s\" comes earlier in the table and won." % (
+                    r["id"], r["name"], win["id"], win["name"]))
             if cands:
                 _, _, r, bad = min(cands, key=lambda x: x[:2])
                 out.append("Closest PAGE rule: %s \"%s\", blocked by %s." % (r["id"], r["name"], "; ".join(_gap(c) for c in bad)))
