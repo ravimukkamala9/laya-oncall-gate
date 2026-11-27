@@ -52,16 +52,16 @@ def test_engine_info_demo_and_laya_shape(monkeypatch):
     info = c.get("/api/engine").get_json()
     assert info["engine"] == "demo" and info["local"] is False
 
-    class FakeRouter:               # shape check for the real-Laya branch without weights
-        device = "mps"
-        loaded = ["english"]
+    class FakeEngine:               # shape check for the real-Laya branch without weights
+        name = "laya"
 
-    class FakeEngine:
-        name, router = "laya", FakeRouter()
+        def describe(self):
+            return {"backend": "vega", "model": "vega", "model_label": "laya.Agent()",
+                    "device": "mps", "checkpoints_loaded": ["nandakishorm/vega-U"]}
     monkeypatch.setattr(appmod, "ENGINE", FakeEngine())
     info = c.get("/api/engine").get_json()
-    assert info["local"] is True and info["device"] == "mps" and info["checkpoints_loaded"] == ["english"]
-
+    assert info["local"] is True and info["device"] == "mps" and info["checkpoints_loaded"] == ["nandakishorm/vega-U"]
+    assert info["backend"] == "vega"
 
 def test_event_has_trace_fields():
     c = app.test_client()
@@ -184,3 +184,62 @@ def test_why_names_closest_page_rule_for_missed_page():
     assert base["base_action"] == "TICKET"
     why = explain.why(base["table"], "TICKET", "TICKET", "page", [])
     assert any("Closest PAGE rule: R4" in w and "severity=1.60" in w for w in why)
+
+
+# ---------------------------------------------------------------- laya >= 0.5 answer shape (no weights needed)
+def _vega_answers(route="auto", sev_level=2, sev_expected=1.7, margin=0.9):
+    """Answers shaped like laya.Agent() (vega engine) returns them, after engine.normalise()."""
+    def noul(p):
+        return {"type": "noul", "noul": p, "probabilities": {"false": 1 - p, "true": p},
+                "prediction_set": ["true" if p >= 0.5 else "false"], "abstain": False, "unbound": False,
+                "route": route, "route_reason": "test"}
+    res = {"answers": {
+        "category": {"type": "choice", "choice": "database", "probabilities": {"database": 0.95, "memory": 0.05},
+                     "answer_confidence": margin, "prediction_set": ["database"], "abstain": False, "route": route},
+        "customer_impact": noul(0.3), "self_recovering": noul(0.1), "sustained": noul(0.3), "business_risk": noul(0.2),
+        "severity": {"type": "score", "score": sev_level, "expected_score": sev_expected,
+                     "legend": {"0": "negligible", "1": "minor", "2": "significant", "3": "critical"},
+                     "prediction_set": ["1", "2"], "abstain": False, "route": route}}}
+    from oncall_gate.engine import normalise
+    return normalise(res)["answers"]
+
+
+def test_normalise_uses_expected_score_for_severity():
+    a = _vega_answers(sev_level=2, sev_expected=1.7)
+    assert a["severity"]["score"] == 1.7 and a["severity"]["level"] == 2
+
+
+def test_r9_follows_laya_route_not_margin():
+    from oncall_gate import policy
+    alert = {"tier": 1}
+    # Laya says review -> R9 pages even though the category margin is high
+    d = policy.decide(_vega_answers(route="review", margin=0.9), alert)
+    assert d["rule"].startswith("R9") and d["base_action"] == "PAGE"
+    assert "route=review" in d["reasons"][0]
+    # Laya says auto -> R9 does not fire even though the margin is low
+    d = policy.decide(_vega_answers(route="auto", margin=0.01), alert)
+    assert not d["rule"].startswith("R9")
+
+
+def test_r9_falls_back_to_margin_without_route():
+    from oncall_gate import policy
+    a = _vega_answers(margin=0.05)
+    for q in a.values():
+        q.pop("route", None)
+    unsure, why = policy.review_signal(a)
+    assert unsure is True and "margin" in why
+    assert policy.decide(a, {"tier": 1})["rule"].startswith("R9")
+
+
+def test_trace_rows_carry_laya_review_fields():
+    from oncall_gate import explain
+    rows = explain.answer_rows(_vega_answers(route="review"))
+    sev = next(r for r in rows if r["id"] == "severity")
+    assert sev["route"] == "review" and sev["prediction_set"] == ["1", "2"] and sev["level"] == 2
+
+
+def test_laya_engine_rejects_unknown_model():
+    import pytest
+    from oncall_gate.engine import LayaEngine
+    with pytest.raises(ValueError, match="LAYA_MODEL"):
+        LayaEngine("nope")

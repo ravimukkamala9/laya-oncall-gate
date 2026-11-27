@@ -14,6 +14,7 @@ from oncall_gate import engine as engine_mod
 from oncall_gate import ollama_engine
 from oncall_gate.compare import CompareJob
 from oncall_gate.engine import build_engine, render_state
+from oncall_gate.explain import review_fields
 from oncall_gate.questions import QUESTIONS
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +47,7 @@ STATE = policy.OnCallState()
 
 def _load():
     """Load the decision engine. Runs in a background thread so the web server starts at once,
-    even while Laya downloads ~1.3 GB of weights on the first run."""
+    even while Laya downloads its weights (several GB) on the first run."""
     global ENGINE
     STATUS.update(state="loading", started=time.time(), error=None)
     print("[oncall-gate] loading engine (first run downloads model weights; this can take minutes)...", flush=True)
@@ -97,15 +98,8 @@ def engine_info():
                        note="Engine is still loading. First run downloads the Laya weights; watch the console.")
     info = {"state": STATUS["state"], "engine": e.name, "note": STATUS["note"], "local": e.name == "laya",
             "python": platform.python_version(), "platform": platform.platform(terse=True)}
+    info.update(e.describe())
     if e.name == "laya":
-        r = e.router
-        for key, attr in (("device", "device"), ("checkpoints_loaded", "loaded")):
-            try:
-                v = getattr(r, attr)
-                v = v() if callable(v) else v
-                info[key] = list(v) if key == "checkpoints_loaded" and v is not None else str(v)
-            except Exception:  # noqa: BLE001
-                info[key] = None
         try:
             import laya, torch
             info["laya"], info["torch"] = laya.__version__, torch.__version__
@@ -148,6 +142,7 @@ def alert_endpoint():
     ms = (time.perf_counter() - t0) * 1000
     ans = res["answers"]
     base = policy.decide(ans, alert)
+    unsure, unsure_why = policy.review_signal(ans)
     action, note, inc, corr = STATE.apply(base, alert)
     state_sent = render_state(alert)
     laya_cls = type(ENGINE).__name__
@@ -155,7 +150,8 @@ def alert_endpoint():
     laya_rows = []
     for qid, q in QUESTIONS.items():
         txt, frac = answer_text(qid, ans[qid])
-        laya_rows.append({"id": qid, "type": q["type"], "question": q["instructions"], "answer": txt, "fraction": round(frac, 3)})
+        laya_rows.append({"id": qid, "type": q["type"], "question": q["instructions"], "answer": txt,
+                          "fraction": round(frac, 3), **review_fields(ans[qid])})
     pager = STATE.pages[-1]["message"] if action == "PAGE" else None
     path = {"steps": [
         {"n": 1, "title": "Alert received", "where": "app.py > alert_endpoint()", "loc": loc(alert_endpoint),
@@ -165,8 +161,9 @@ def alert_endpoint():
          "loc": loc(render_state), "summary": "Laya reads text only, so the alert is packed into this small dictionary.",
          "data": state_sent},
         {"n": 3, "title": "Laya judges the alert (one forward pass, 6 answers)",
-         "where": "%s.predict() > %s" % (laya_cls, "laya Router.predict()" if ENGINE.name == "laya" else "keyword stand-in (NOT Laya)"),
-         "loc": loc(laya_fn), "summary": "Each question below is answered with a probability or level. No text is generated. Took %.1f ms." % ms,
+         "where": "%s.predict() > %s" % (laya_cls, ENGINE.describe()["model_label"] if ENGINE.name == "laya" else "keyword stand-in (NOT Laya)"),
+         "loc": loc(laya_fn), "summary": "Each question below is answered with a probability or level. No text is generated. Took %.1f ms.%s" % (
+             ms, " %s." % unsure_why if ENGINE.name == "laya" else ""),
          "rows": laya_rows},
         {"n": 4, "title": "Policy rules applied (first matching rule wins)", "where": "oncall_gate/policy.py > decide()",
          "loc": loc(policy.decide), "summary": base["narrative"]["headline"], "table": base["table"],
@@ -185,6 +182,8 @@ def alert_endpoint():
                       **{k: round(ans[k]["noul"], 3) for k in
                          ("customer_impact", "self_recovering", "sustained", "business_risk")},
                       "severity": round(ans["severity"]["score"], 2)},
+          "review": {"needs_review": unsure, "why": unsure_why,
+                     "flagged": [q for q in QUESTIONS if ans[q].get("route") == "review"]},
           "decision": {"action": action, "base_action": base["base_action"], "rule": base["rule"],
                        "reasons": base["reasons"] + ([note] if note else []), "incident": inc},
           "path": path}

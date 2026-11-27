@@ -1,4 +1,5 @@
-laya
+# laya 0.5 made laya.Agent() (the "vega" engine) the default and needs Python >= 3.10.
+laya>=0.5.5,<0.6
 flask>=3
 huggingface_hub
 pytest

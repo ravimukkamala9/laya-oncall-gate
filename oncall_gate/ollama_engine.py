@@ -4,7 +4,8 @@ but by generating JSON text with a local LLM. Same output shape as Laya, so the 
 Differences worth knowing (they show up in the comparison):
   * An LLM writes tokens (JSON); Laya does one forward pass and writes none.
   * Numbers are the LLM's *stated* estimates, not calibrated model probabilities.
-  * category is a single label, so we report it as one-hot (margin 1.0); rule R9 (low margin) never fires.
+  * category is a single label, so we report it as one-hot (margin 1.0); no Laya `route` field,
+    so rule R9 (model unsure) falls back to the margin test and never fires.
 """
 import json
 import os
